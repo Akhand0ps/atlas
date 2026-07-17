@@ -1,1 +1,12 @@
-RAG_Project_PRD_and_Workflow
+PRD.md
+ARCHITECTURE.md
+DECISIONS.md
+PROGRESS.md
+API_CONTRACT.md
+RISKS.md
+venv
+pyproject.toml
+__pycache__
+pyrefly.toml
+pyrightconfig.json
+.vscode
