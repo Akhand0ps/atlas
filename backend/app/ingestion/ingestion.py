@@ -140,17 +140,17 @@ async def upload(
     )
 
 
-    db.add(document)
-    await db.commit()
-    await db.refresh(document)
+    # db.add(document)
+    # await db.commit()
+    # await db.refresh(document)
     
     print("================")
 
-    print(extracted_document)
+    # print(extracted_document)
 
     print("================")
     
-    return document
+    return extracted_document
 
 @router.get("/documents",response_model=DocumentListResponse)
 async def get_all_documents(db:AsyncSession = Depends(get_db_session)):
