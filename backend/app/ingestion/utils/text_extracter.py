@@ -13,8 +13,11 @@ class DocumentType(str, Enum):
 
 class BlockType(str, Enum):
     TEXT="text"
+    HEADING="heading"
+    LIST_ITEM="list_item"
     IMAGE="image"
     TABLE="table"
+    
 
 
 
@@ -28,6 +31,9 @@ class Block(BaseModel):
     type:BlockType
     bbox:list[float] | None = Field(default=None)
     text:str | None = None
+    font_size:float | None = None
+    is_bold:bool | None = None
+    level:int|None = None
 
 
 
@@ -38,6 +44,7 @@ class Page(BaseModel):
     rotation:int | None = None
     text:str
     blocks:list[Block]
+    doc_char_offset:int = 0 #computed at ingestion , cumulative
 
 class DocumentSchema(BaseModel):
     document_type: DocumentType
@@ -51,6 +58,17 @@ class DocumentSchema(BaseModel):
 
 # Schema.Page.Block.model_json_schema()
 
+
+
+#computer char offsets
+
+def compute_char_offsets(pages: list[Page]) -> list[Page]:
+    offset = 0
+
+    for page in pages:
+        page.doc_char_offset = offset
+        offset += len(page.text)
+    return pages
 
 def extract_text_blocks(page:fitz.Page)->list[Block]:
     """ 
@@ -171,7 +189,10 @@ def extract_pdf(file_content:bytes) -> DocumentSchema:
         pages = [
             build_pages(page)
             for page in doc
-        ]    
+        ] 
+
+
+        pages = compute_char_offsets(pages)   
         return DocumentSchema(
             document_type=DocumentType.PDF,
             metadata=doc.metadata,
@@ -232,6 +253,8 @@ def extract_txt(file_content:bytes)-> DocumentSchema:
         blocks=blocks
     )
 
+    page = compute_char_offsets([page])
+
    
 
     return DocumentSchema(
@@ -284,11 +307,14 @@ def extract_md(file_content:bytes) -> DocumentSchema:
         blocks=blocks
     )
 
-
+    page = compute_char_offsets([page])
+    
     return DocumentSchema(
         document_type=DocumentType.MD,
         metadata={},
         page_count=1,
-        pages=[page]
+        pages=page
     )
     
+
+

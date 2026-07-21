@@ -10,7 +10,8 @@ from uuid import uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ingestion.utils.text_extracter import extract_pdf,extract_txt,extract_md
-
+from sqlalchemy import select
+from datetime import datetime
 
 router = APIRouter(
     prefix="/ingestion",
@@ -59,13 +60,17 @@ class status(str,Enum):
 
 
 class DocumentResponse(BaseModel):
+    id:str
     filename: str
-    fileType: DocumentType
+    file_type: DocumentType
     size_bytes: int
     status: status
-    summary: str                  
+    summary: str | None = None    
+    uploaded_at: datetime
     model_config = {"from_attributes":True}
 
+class DocumentListResponse(BaseModel):
+    documents: list[DocumentResponse]
 
 class ChunkResponse(BaseModel):
     chunk_id: str
@@ -139,6 +144,15 @@ async def upload(
     await db.commit()
     await db.refresh(document)
     
+    print("================")
 
+    print(extracted_document)
+
+    print("================")
     
     return document
+
+@router.get("/documents",response_model=DocumentListResponse)
+async def get_all_documents(db:AsyncSession = Depends(get_db_session)):
+    documents = await db.execute(select(Document).order_by(Document.uploaded_at.desc()))
+    return {"documents":documents.scalars().all()}
