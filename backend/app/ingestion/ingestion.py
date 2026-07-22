@@ -13,38 +13,13 @@ from app.ingestion.utils.text_extracter import extract_pdf,extract_txt,extract_m
 from sqlalchemy import select
 from datetime import datetime
 
+from app.ingestion.utils.chunking import chunk_document , chunkingMethod
+import json
+
 router = APIRouter(
     prefix="/ingestion",
     tags=["ingestion"]
 )
-
-
-"""
-filename
-file_typ
-size_byt
-uploaded
-status =
-summary 
-
-
-
-chunks:
-document_id 
-chunk_index 
-page
-char_start 
-char_end 
-text_preview 
-embedding_model 
-created_at 
-
-# document = relationship("Document", back_populates="chunks")
-
-"""
-
-# class chunksCrate(BaseModel)
-
 
 
 class DocumentType(str,Enum):
@@ -83,12 +58,6 @@ class ChunkResponse(BaseModel):
 
 
 
-
-
-
-#define the Document Upload endpoint.
-
-
 allowed_format = {
     DocumentType.PDF,
     DocumentType.MD,
@@ -122,7 +91,7 @@ async def upload(
     # print(ext(file_content))
     extracted_document = None
     if file_type == DocumentType.PDF:
-        extracted_document = extract_pdf(file_content).model_dump(mode="json")
+        extracted_document = extract_pdf(file_content)
 
     if file_type == DocumentType.TXT:
         extracted_document = extract_txt(file_content)
@@ -139,18 +108,52 @@ async def upload(
         summary=None
     )
 
+    db.add(document)
+    await db.commit()
+    await db.refresh(document)
 
-    # db.add(document)
-    # await db.commit()
-    # await db.refresh(document)
-    
-    print("================")
+    """
+        document:DocumentSchema,
+    document_id:str,
+    method:chunkingMethod = chunkingMethod.RCTS,
+    chunk_size: int = 512,
+    chunk_overlap:int = 64,
+    """
 
-    # print(extracted_document)
+    chunks = chunk_document(
+        extracted_document,
+        document.id,
+        chunkingMethod.RCTS
+    )
 
-    print("================")
-    
-    return extracted_document
+    # Save chunks to DB
+    db_chunks = []
+    for i, chunk in enumerate(chunks):
+        db_chunks.append(
+            Chunk(
+                id=chunk.chunk_id,
+                document_id=chunk.document_id,
+                chunk_index=i,
+                text=chunk.text,
+                token_count=chunk.token_count,
+                doc_char_start=chunk.doc_char_start,
+                doc_char_end=chunk.doc_char_end,
+                page_start=chunk.page_start,
+                page_end=chunk.page_end,
+                chunking_method=chunk.chunking_method.value,
+                content_hash=chunk.content_hash,
+                bbox_union=json.dumps(chunk.bbox_union) if chunk.bbox_union else None,
+                section_path=json.dumps(chunk.section_path),
+                block_types=json.dumps(chunk.block_types),
+                prev_chunk_id=chunk.prev_chunk_id,
+                next_chunk_id=chunk.next_chunk_id,
+            )
+        )
+
+    db.add_all(db_chunks)
+    await db.commit()
+
+    return {"document_id": document.id, "chunks_saved": len(db_chunks)}
 
 @router.get("/documents",response_model=DocumentListResponse)
 async def get_all_documents(db:AsyncSession = Depends(get_db_session)):
